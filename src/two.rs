@@ -1,132 +1,122 @@
 use std::any::{Any, TypeId};
-use tuple_list::TupleList;
-
-trait AsTypeId {
-    type Result: TupleList;
-
-    fn as_type_id() -> Self::Result;
-}
-
-impl AsTypeId for () {
-    type Result = ();
-
-    fn as_type_id() -> Self::Result {
-        ()
-    }
-}
-
-impl<Head: 'static, Tail> AsTypeId for (Head, Tail)
-where
-    Tail: AsTypeId,
-    (TypeId, Tail::Result): TupleList,
-{
-    type Result = (TypeId, Tail::Result);
-
-    fn as_type_id() -> Self::Result {
-        (TypeId::of::<Head>(), Tail::as_type_id())
-    }
-}
-
-trait Mapper<T, R> {
-    type Result: TupleList;
-    fn map<F>(self, f: F) -> Self::Result
-    where
-        F: FnMut(T) -> R;
-}
-
-impl<T, R> Mapper<T, R> for () {
-    type Result = ();
-
-    fn map<F>(self, _: F)
-    where
-        F: FnMut(T) -> R,
-    {
-        ()
-    }
-}
-
-impl<R, Head, Tail> Mapper<Head, R> for (Head, Tail)
-where
-    Tail: Mapper<Head, R>,
-    (R, Tail::Result): TupleList,
-{
-    type Result = (R, Tail::Result);
-
-    fn map<F>(self, mut f: F) -> Self::Result
-    where
-        F: FnMut(Head) -> R,
-    {
-        let (head, tail) = self;
-        let head = f(head);
-        (head, tail.map(f))
-    }
-}
-
-trait Split: TupleList + 'static {
-    type Head: 'static;
-    type Tail: Split;
-
-    fn from_parts(head: Self::Head, tail: Self::Tail) -> Self;
-}
-
-impl Split for () {
-    type Head = ();
-    type Tail = ();
-
-    fn from_parts(_: Self::Head, _: Self::Tail) -> Self {
-        ()
-    }
-}
-
-impl<H: 'static, T> Split for (H, T)
-where
-    (H, T): TupleList,
-    T: Split,
-{
-    type Head = H;
-    type Tail = T;
-
-    fn from_parts(head: Self::Head, tail: Self::Tail) -> Self {
-        (head, tail)
-    }
-}
+use tuple_list::{Tuple, TupleList};
 
 type BoxAny = Box<dyn Any + Send + Sync>;
 
-trait Downcast<T: Split>: TupleList {
-    fn downcast(self) -> Option<T>;
+trait SuperTuple: Tuple {
+    type SuperTupleList: SuperTupleList<SuperTuple = Self>;
+
+    fn into_super_tuple_list(self) -> Self::SuperTupleList;
 }
 
-impl<T: Split> Downcast<T> for () {
-    fn downcast(self) -> Option<T> {
-        let mut wrapper = Some(self);
+impl<T> SuperTuple for T
+where
+    T: Tuple,
+    T::TupleList: SuperTupleList<SuperTuple = Self>,
+{
+    type SuperTupleList = Self::TupleList;
 
-        <dyn Any>::downcast_mut::<Option<T>>(&mut wrapper)
+    fn into_super_tuple_list(self) -> Self::SuperTupleList {
+        self.into_tuple_list()
+    }
+}
+
+trait SuperTupleList: TupleList + 'static {
+    type SuperTuple: SuperTuple<SuperTupleList = Self>;
+    type Head: 'static;
+    type Tail: SuperTupleList;
+    type TypeIds: TypeIds<Self::Head, Self::Tail>;
+
+    fn into_super_tuple(self) -> Self::SuperTuple;
+    fn from_parts(head_tail: (Self::Head, Self::Tail)) -> Self;
+    fn type_ids() -> Self::TypeIds;
+}
+
+impl SuperTupleList for () {
+    type SuperTuple = ();
+    type Head = ();
+    type Tail = ();
+    type TypeIds = ();
+
+    fn into_super_tuple(self) -> Self::SuperTuple {
+        ()
+    }
+
+    fn from_parts(_: (Self::Head, Self::Tail)) -> Self {
+        ()
+    }
+
+    fn type_ids() -> Self::TypeIds {
+        ()
+    }
+}
+
+impl<H: 'static, T> SuperTupleList for (H, T)
+where
+    Self: TupleList,
+    T: SuperTupleList,
+    (TypeId, T::TypeIds): TypeIds<H, T>,
+{
+    type SuperTuple = Self::Tuple;
+    type Head = H;
+    type Tail = T;
+    type TypeIds = (TypeId, T::TypeIds);
+
+    fn into_super_tuple(self) -> Self::SuperTuple {
+        self.into_tuple()
+    }
+
+    fn from_parts(head_tail: (Self::Head, Self::Tail)) -> Self {
+        head_tail
+    }
+
+    fn type_ids() -> Self::TypeIds {
+        (TypeId::of::<H>(), T::type_ids())
+    }
+}
+
+trait TypeIds<H: 'static, T: SuperTupleList>: TupleList {
+    fn downcast<F>(self, fun: F) -> Option<(H, T)>
+    where
+        F: FnMut(TypeId) -> Option<BoxAny>;
+}
+
+impl<H: 'static, T: SuperTupleList> TypeIds<H, T> for () {
+    fn downcast<F>(self, _fun: F) -> Option<(H, T)>
+    where
+        F: FnMut(TypeId) -> Option<BoxAny>,
+    {
+        let mut wrapper = Some(((), ()));
+
+        <dyn Any>::downcast_mut::<Option<(H, T)>>(&mut wrapper)
             .map(Option::take)
             .flatten()
     }
 }
 
-impl<T: Split, Tail> Downcast<T> for (BoxAny, Tail)
+impl<H: 'static, T: SuperTupleList, Tail> TypeIds<H, T> for (TypeId, Tail)
 where
     Self: TupleList,
-    Tail: Downcast<T::Tail>,
+    Tail: TypeIds<T::Head, T::Tail>,
 {
-    fn downcast(self) -> Option<T> {
-        if T::TUPLE_LIST_SIZE != Self::TUPLE_LIST_SIZE {
+    fn downcast<F>(self, mut fun: F) -> Option<(H, T)>
+    where
+        F: FnMut(TypeId) -> Option<BoxAny>,
+    {
+        if T::TUPLE_LIST_SIZE != Tail::TUPLE_LIST_SIZE {
             return None;
         }
 
         let (head, tail) = self;
-        let head = match head.downcast::<T::Head>() {
-            Ok(head) => *head,
-            Err(_) => return None,
-        };
-        let tail = match tail.downcast() {
-            Some(tail) => tail,
-            None => return None,
-        };
-        Some(T::from_parts(head, tail))
+
+        fun(head)
+            .and_then(|head| head.downcast::<H>().ok())
+            .map(|head| *head)
+            .and_then(move |head| {
+                tail.downcast(fun)
+                    .map(T::from_parts)
+                    .map(|tail| (head, tail))
+            })
     }
 }
 
@@ -134,7 +124,6 @@ where
 mod tests {
     use super::super::Map;
     use super::*;
-    use tuple_list::Tuple;
 
     #[test]
     fn test() {
@@ -147,23 +136,40 @@ mod tests {
     fn hallo<F, A, R>(fun: F) -> Option<R>
     where
         F: Fn(A) -> R,
-        A: Tuple,
-        A::TupleList: AsTypeId + Split,
-        <A::TupleList as AsTypeId>::Result: Mapper<TypeId, BoxAny>,
-        <<A::TupleList as AsTypeId>::Result as Mapper<TypeId, BoxAny>>::Result:
-            Downcast<A::TupleList>,
+        A: SuperTuple,
     {
         let mut map = Map::new();
         map.insert(1 as usize);
         map.insert("Hello");
         map.insert("World".to_string());
 
-        let types = <A::TupleList as AsTypeId>::as_type_id();
+        let types = <A::SuperTupleList>::type_ids();
+        types
+            .downcast(|type_id| map.remove_any(&type_id))
+            .map(<A::SuperTupleList>::from_parts)
+            .map(SuperTupleList::into_super_tuple)
+            .map(|tuple| fun(tuple))
+    }
 
-        let res = types.map(|type_id| map.remove_any(&type_id).unwrap());
+    #[test]
+    fn test_is_super_tuple() {
+        let tuple = (1 as usize, 2 as usize, 3 as usize);
+        is_super_tuple(tuple);
+    }
 
-        res.downcast()
-            .map(TupleList::into_tuple)
-            .map(fun)
+    fn is_super_tuple<T: SuperTuple>(input: T) {
+        let list = input.into_super_tuple_list();
+        is_super_tuple_list(list);
+    }
+
+    fn is_super_tuple_list<T: SuperTupleList>(input: T) {
+        let type_ids = T::type_ids().into_tuple();
+        type_name_of_val(&type_ids);
+        let res = input.into_super_tuple();
+        type_name_of_val(&res);
+    }
+
+    fn type_name_of_val<T>(_val: &T) {
+        println!("{}", std::any::type_name::<T>());
     }
 }
