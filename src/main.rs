@@ -1,12 +1,75 @@
 use std::any::{Any, TypeId};
+use std::cell::Cell;
 use std::collections::HashMap;
 use std::hash::{BuildHasher, Hash, Hasher};
 use tuple_list::Tuple;
+use std::ops::{Deref, DerefMut};
 
 mod two;
 
 fn main() {
-    let _map: HashMap<u8, u8> = HashMap::new();
+    let mut map: HashMap<TypeId, Box<dyn Any>> = HashMap::new();
+    map.insert(TypeId::of::<usize>(), Box::new(1 as usize));
+
+    let mut ref_map = HashMap::new();
+    for (key, val) in map.iter_mut() {
+        ref_map.insert(*key, Value::new(val.deref_mut()));
+    }
+
+    {
+        let mut test = ref_map.get(&TypeId::of::<usize>()).and_then(Value::take).unwrap();
+        let test: &mut usize = test.downcast_mut().unwrap();
+        *test += 1;
+    }
+    {
+        let mut test = ref_map.get(&TypeId::of::<usize>()).and_then(Value::take).unwrap();
+        let test: &mut usize = test.downcast_mut().unwrap();
+        println!("{}", test);
+    }
+}
+
+struct Value<T> {
+    inner: Cell<Option<T>>,
+}
+
+impl<T> Value<T> {
+    fn new(input: T) -> Self {
+        Value {
+            inner: Cell::new(Some(input)),
+        }
+    }
+    fn take(&self) -> Option<Guard<T>> {
+        self.inner.take().map(|inner| Guard {
+            owner: &self.inner,
+            inner: Some(inner),
+        })
+    }
+}
+
+struct Guard<'a, T: 'a> {
+    owner: &'a Cell<Option<T>>,
+    inner: Option<T>,
+}
+
+impl <'a, T: 'a> Deref for Guard<'a, T> {
+    type Target = T;
+
+    fn deref(&self) -> &Self::Target {
+        self.inner.as_ref().unwrap()
+    }
+}
+
+impl <'a, T: 'a> DerefMut for Guard<'a, T> {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        self.inner.as_mut().unwrap()
+    }
+}
+
+
+impl <'a, T: 'a> Drop for Guard<'a, T> {
+    fn drop(&mut self) {
+        self.owner.set(self.inner.take())
+    }
 }
 
 struct Container<T, S> {
@@ -167,60 +230,3 @@ impl Map {
         Some(res)
     }
 }
-
-/*struct Reactor {}
-
-impl Reactor {
-    fn new() -> Self {
-        Reactor {}
-    }
-
-    fn add_startup<T: System<A>, A: Tuple>(&mut self, system: T)
-    where
-        A::TupleList: Test,
-    {
-        //let mut res: Box<dyn DynTupleCons> = Box::new(());
-        let id = TypeId::of::<<<A as Tuple>::TupleList as Test>::Head>();
-        if id == TypeId::of::<()>() {
-            return;
-        }
-        let mut map = Map::new();
-        let map_res = map
-            .remove::<<<A as Tuple>::TupleList as Test>::Head>()
-            .unwrap();
-        //res = TupleCons::cons(map_res, res);
-
-        //A::Head
-    }
-}*/
-
-/*impl <Tail> Append for (Box<dyn Any>, Tail) where Tail: Append + TupleList {
-    fn as_any_box(self: Box<Self>) -> Box<dyn Any> {
-        self
-    }
-
-    fn append(self, value: Box<dyn Any>) -> (Box<dyn Any>, Box<dyn Append>) {
-        let (head, tail) = self;
-        let res = tail.append(value);
-        return (head, Box::new(res))
-    }
-}
-
-impl Append for Box<dyn Append> {
-    fn as_any_box(self: Box<Self>) -> Box<dyn Any> {
-        //self
-        todo!()
-    }
-
-    fn append(self, value: Box<dyn Any>) -> (Box<dyn Any>, Box<dyn Append>) {
-        (value, self)
-    }
-}
-
-/*impl DynTupleCons for Box<dyn DynTupleCons> {
-    fn cons(self, head: Box<dyn DynTupleCons>) -> Box<dyn DynTupleCons> {
-        DynTupleCons::cons((self, ()), head)
-    }
-}*/
-
- */

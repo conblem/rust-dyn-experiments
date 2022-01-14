@@ -1,6 +1,11 @@
 use std::any::{Any, TypeId};
 use tuple_list::{Tuple, TupleList};
 
+struct Res<'a, T> {
+    t: &'a T,
+    ty: TypeId,
+}
+
 type BoxAny = Box<dyn Any + Send + Sync>;
 
 trait SuperTuple: Tuple {
