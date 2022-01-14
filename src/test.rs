@@ -80,7 +80,7 @@ where
     }
 }
 
-trait Downcast<T: Split> {
+trait Downcast<T: Split>: TupleList {
     fn downcast(self) -> Option<T>;
 }
 
@@ -92,9 +92,14 @@ impl<T: Split> Downcast<T> for () {
 
 impl<T: Split, Tail> Downcast<T> for (BoxAny, Tail)
 where
+    Self: TupleList,
     Tail: Downcast<T::Tail>,
 {
     fn downcast(self) -> Option<T> {
+        if T::TUPLE_LIST_SIZE != Self::TUPLE_LIST_SIZE {
+            return None;
+        }
+
         let (head, tail) = self;
         let head = match head.downcast::<T::Head>() {
             Ok(head) => *head,
