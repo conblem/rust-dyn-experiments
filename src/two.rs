@@ -1,5 +1,5 @@
 use std::any::{Any, TypeId};
-use tuple_list::{tuple_list_type, TupleList};
+use tuple_list::TupleList;
 
 trait AsTypeId {
     type Result: TupleList;
@@ -37,7 +37,7 @@ trait Mapper<T, R> {
 impl<T, R> Mapper<T, R> for () {
     type Result = ();
 
-    fn map<F>(self, f: F)
+    fn map<F>(self, _: F)
     where
         F: FnMut(T) -> R,
     {
@@ -99,7 +99,6 @@ trait Downcast<T: Split>: TupleList {
 
 impl<T: Split> Downcast<T> for () {
     fn downcast(self) -> Option<T> {
-        println!("{}", std::any::type_name::<T>());
         let mut wrapper = Some(self);
 
         <dyn Any>::downcast_mut::<Option<T>>(&mut wrapper)
@@ -139,20 +138,32 @@ mod tests {
 
     #[test]
     fn test() {
+        let res = hallo(|(num, str, string): (usize, &'static str, String)| {
+            format!("{}, {}, {}", num, str, string)
+        });
+        println!("{}", res.unwrap());
+    }
+
+    fn hallo<F, A, R>(fun: F) -> Option<R>
+    where
+        F: Fn(A) -> R,
+        A: Tuple,
+        A::TupleList: AsTypeId + Split,
+        <A::TupleList as AsTypeId>::Result: Mapper<TypeId, BoxAny>,
+        <<A::TupleList as AsTypeId>::Result as Mapper<TypeId, BoxAny>>::Result:
+            Downcast<A::TupleList>,
+    {
         let mut map = Map::new();
         map.insert(1 as usize);
         map.insert("Hello");
         map.insert("World".to_string());
 
-        let types = <<(usize, &'static str, String) as Tuple>::TupleList as AsTypeId>::as_type_id();
-
-        println!("{:?}", types);
+        let types = <A::TupleList as AsTypeId>::as_type_id();
 
         let res = types.map(|type_id| map.remove_any(&type_id).unwrap());
 
-        let res = Downcast::<tuple_list_type!(usize, &'static str, String)>::downcast(res)
-            .unwrap()
-            .into_tuple();
-        println!("{:?}", res);
+        res.downcast()
+            .map(TupleList::into_tuple)
+            .map(fun)
     }
 }

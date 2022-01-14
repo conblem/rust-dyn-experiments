@@ -1,17 +1,12 @@
-mod test;
+use std::any::{Any, TypeId};
+use std::collections::HashMap;
+use std::hash::{BuildHasher, Hash, Hasher};
+use tuple_list::Tuple;
+
 mod two;
 
-use std::any::{Any, TypeId};
-use std::collections::hash_map::{DefaultHasher, RandomState};
-use std::collections::HashMap;
-use std::convert::Infallible;
-use std::hash::{BuildHasher, Hash, Hasher};
-use std::marker::PhantomData;
-use tuple_list::{tuple_list, tuple_list_type, NonEmptyTuple, Tuple, TupleCons, TupleList};
-
 fn main() {
-    let mut map: HashMap<u8, u8> = HashMap::new();
-    let hasher_factory = map.hasher().clone();
+    let _map: HashMap<u8, u8> = HashMap::new();
 }
 
 struct Container<T, S> {
@@ -50,10 +45,6 @@ impl<T: PartialEq, S> PartialEq for Container<T, S> {
 }
 
 impl<T: Eq, S> Eq for Container<T, S> {}
-
-fn convert<T: Eq + Clone + Hash + Any>(input: T) -> Box<dyn DynHash> {
-    Box::new(input)
-}
 
 trait DynHash: DynEq {
     fn clone_box(&self) -> Box<dyn DynHash>;
@@ -132,11 +123,6 @@ where
     T: FnMut(A),
 {
     type Res = T::Output;
-}
-
-struct FnContainer<T, A> {
-    inner: T,
-    _a: PhantomData<A>,
 }
 
 struct Map {
