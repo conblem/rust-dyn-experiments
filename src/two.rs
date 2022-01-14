@@ -101,9 +101,7 @@ impl<H: 'static, T: SuperTupleList> TypeIds<H, T> for () {
         // To get an owned value out of a downcast_mut we use Option<>
         // otherwise we would have to Box it
         <dyn Any>::downcast_mut::<Option<(H, T)>>(&mut wrapper)
-            .map(Option::take)
-            // wrapper is always Some
-            .unwrap()
+            .and_then(Option::take)
     }
 }
 
