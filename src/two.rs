@@ -75,6 +75,8 @@ where
     }
 }
 
+// Trait to Support Downcasting of BoxAny TupleList to concrete TupleList
+// To avoid overflowing the Rust Compiler we pass the concrete TupleList split into Head and Tail
 trait TypeIds<H: 'static, T: SuperTupleList>: TupleList {
     fn downcast<F>(self, fun: F) -> Option<(H, T)>
     where
@@ -86,11 +88,17 @@ impl<H: 'static, T: SuperTupleList> TypeIds<H, T> for () {
     where
         F: FnMut(TypeId) -> Option<BoxAny>,
     {
+        // At this point (H, T) should be ((), ())
+        // If this is the case we can cast ((), ()) to (H, T)
+        // Otherwise this method was called incorrectly so we return None
         let mut wrapper = Some(((), ()));
 
+        // To get an owned value out of a downcast_mut we use Option<>
+        // otherwise we would have to Box it
         <dyn Any>::downcast_mut::<Option<(H, T)>>(&mut wrapper)
             .map(Option::take)
-            .flatten()
+            // wrapper is always Some
+            .unwrap()
     }
 }
 
@@ -103,17 +111,22 @@ where
     where
         F: FnMut(TypeId) -> Option<BoxAny>,
     {
+        // Early Return if TupleList have different Sizes
         if T::TUPLE_LIST_SIZE != Tail::TUPLE_LIST_SIZE {
             return None;
         }
 
         let (head, tail) = self;
-
+        // Get Boxed Head using TypeId
         fun(head)
+            // Downcast Boxed Head
             .and_then(|head| head.downcast::<H>().ok())
+            // Unbox Concrete Head
             .map(|head| *head)
-            .and_then(move |head| {
+            .and_then(|head| {
+                // Recursively Downcast Tail
                 tail.downcast(fun)
+                    // Reassemble Tail from (T::Head, T::Tail)
                     .map(T::from_parts)
                     .map(|tail| (head, tail))
             })
@@ -146,9 +159,12 @@ mod tests {
         let types = <A::SuperTupleList>::type_ids();
         types
             .downcast(|type_id| map.remove_any(&type_id))
+            // Reassemble concrete TupleList from (A::TupleList::Head, A::TupleList::Tail)
             .map(<A::SuperTupleList>::from_parts)
+            // Turn concrete TupleList into concrete Tuple
             .map(SuperTupleList::into_super_tuple)
-            .map(|tuple| fun(tuple))
+            // Pass concrete Tuple to fun
+            .map(fun)
     }
 
     #[test]
@@ -169,6 +185,7 @@ mod tests {
         type_name_of_val(&res);
     }
 
+    // is currently experimental #66359 so we just implement it ourselves
     fn type_name_of_val<T>(_val: &T) {
         println!("{}", std::any::type_name::<T>());
     }
