@@ -1,5 +1,5 @@
-use std::hash::{Hasher, Hash};
 use std::any::Any;
+use std::hash::{Hash, Hasher};
 
 trait DynHash: DynEq {
     fn clone_box(&self) -> Box<dyn DynHash>;
@@ -14,8 +14,8 @@ trait DynEq: Any {
 }
 
 impl<T> DynEq for T
-    where
-        T: Eq + Any,
+where
+    T: Eq + Any,
 {
     fn as_any(&self) -> &dyn Any {
         self
@@ -29,8 +29,8 @@ impl<T> DynEq for T
     }
 }
 impl<T> DynHash for T
-    where
-        T: Hash + Clone + Eq + Any,
+where
+    T: Hash + Clone + Eq + Any,
 {
     fn clone_box(&self) -> Box<dyn DynHash> {
         Box::new(self.clone())

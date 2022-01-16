@@ -3,9 +3,9 @@ use std::cell::Cell;
 use std::collections::HashMap;
 use std::ops::{Deref, DerefMut};
 
-mod supertuple;
 mod dynhash;
 mod ordignorehash;
+mod supertuple;
 
 type SuperAny = dyn Any + Send + Sync + 'static;
 type BoxAny = Box<SuperAny>;
@@ -20,12 +20,18 @@ fn main() {
     }
 
     {
-        let mut test = ref_map.get(&TypeId::of::<usize>()).and_then(Value::take).unwrap();
+        let mut test = ref_map
+            .get(&TypeId::of::<usize>())
+            .and_then(Value::take)
+            .unwrap();
         let test: &mut usize = test.downcast_mut().unwrap();
         *test += 1;
     }
     {
-        let mut test = ref_map.get(&TypeId::of::<usize>()).and_then(Value::take).unwrap();
+        let mut test = ref_map
+            .get(&TypeId::of::<usize>())
+            .and_then(Value::take)
+            .unwrap();
         let test: &mut usize = test.downcast_mut().unwrap();
         println!("{}", test);
     }
@@ -54,7 +60,7 @@ struct Guard<'a, T: 'a> {
     inner: Option<T>,
 }
 
-impl <'a, T: 'a> Deref for Guard<'a, T> {
+impl<'a, T: 'a> Deref for Guard<'a, T> {
     type Target = T;
 
     fn deref(&self) -> &Self::Target {
@@ -62,19 +68,17 @@ impl <'a, T: 'a> Deref for Guard<'a, T> {
     }
 }
 
-impl <'a, T: 'a> DerefMut for Guard<'a, T> {
+impl<'a, T: 'a> DerefMut for Guard<'a, T> {
     fn deref_mut(&mut self) -> &mut Self::Target {
         self.inner.as_mut().unwrap()
     }
 }
 
-
-impl <'a, T: 'a> Drop for Guard<'a, T> {
+impl<'a, T: 'a> Drop for Guard<'a, T> {
     fn drop(&mut self) {
         self.owner.set(self.inner.take())
     }
 }
-
 
 struct Map {
     inner: HashMap<TypeId, BoxAny>,
@@ -109,10 +113,9 @@ impl Map {
         Some(res)
     }
 
-    fn get_any(&mut self, key: &TypeId) -> Option<&mut BoxAny> {
-        self.inner.get_mut(key)
+    fn get_any(&mut self, key: &TypeId) -> Option<&mut SuperAny> {
+        self.inner.get_mut(key).map(DerefMut::deref_mut)
     }
-
 
     fn insert<T: Send + Sync + 'static>(&mut self, elem: T) -> Option<T> {
         let res = self.inner.insert(TypeId::of::<T>(), Box::new(elem));
