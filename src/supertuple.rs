@@ -47,7 +47,7 @@ impl<'a> SuperTupleList<'a> for () {
         ()
     }
 
-    fn from_head(head: &Self::Head) -> Option<Self> {
+    fn from_head(_: &Self::Head) -> Option<Self> {
         Some(())
     }
 
@@ -126,8 +126,7 @@ where
             None => return None,
         };
 
-        // Stop condition is Met if Tail is ()
-        // Specialization if we are at the end of the TupleList
+        // Stop condition is met if Tail is ()
         let head_of_tail = &mut ();
         let head_of_tail = <dyn Any>::downcast_mut::<T::Head>(head_of_tail);
         if let Some(head_of_tail) = head_of_tail {
@@ -175,7 +174,6 @@ mod tests {
         F: Fn(A) -> R,
         A: SuperTuple<'a>,
     {
-        let string_type = TypeId::of::<String>();
         let types = <A::SuperTupleList>::type_ids();
 
         types
