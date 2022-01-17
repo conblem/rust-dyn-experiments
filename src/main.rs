@@ -6,6 +6,7 @@ use std::ops::{Deref, DerefMut};
 mod dynhash;
 mod ordignorehash;
 mod supertuple;
+mod graph;
 
 type SuperAny = dyn Any + Send + Sync + 'static;
 type BoxAny = Box<SuperAny>;
