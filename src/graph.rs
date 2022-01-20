@@ -1,4 +1,8 @@
+use petgraph::graph::NodeIndex;
+use petgraph::Graph;
+use smallvec::SmallVec;
 use std::any::TypeId;
+use std::collections::HashMap;
 use tuple_list::{Tuple, TupleList};
 
 trait SystemDeps: Tuple {
@@ -51,13 +55,35 @@ trait System: 'static {
     type Deps: SystemDeps;
 }
 
+struct ReactorBuilder {
+    map: HashMap<TypeId, (NodeIndex, SmallVec<[TypeId; 12]>)>,
+    graph: Graph<(), ()>,
+}
+
+impl ReactorBuilder {
+    fn add_system<S: System>(&mut self) {
+        let index = self.graph.add_node(());
+
+        let mut deps = SmallVec::new();
+        <S::Deps as SystemDeps>::SystemDepsList::for_each(|type_id| deps.push(type_id));
+
+        self.map.insert(TypeId::of::<S>(), (index, deps));
+    }
+
+    fn build(mut self) {
+        let map = self.map;
+        for (system_index, deps) in map.values() {
+            for dep in deps {
+                let (dep_index, _) = map.get(dep).unwrap();
+                self.graph.add_edge(*dep_index, *system_index, ());
+            }
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use petgraph::algo::toposort;
-    use petgraph::graph::NodeIndex;
-    use petgraph::Graph;
-    use std::any::TypeId;
-    use std::collections::HashMap;
 
     use super::*;
 
@@ -92,11 +118,5 @@ mod tests {
         map.insert(TypeId::of::<S>(), index);
     }
 
-    fn insert_edges<S: System>(map: &HashMap<TypeId, NodeIndex>, graph: &mut Graph<(), ()>) {
-        let system_index = map.get(&TypeId::of::<S>()).unwrap();
-        <S::Deps as SystemDeps>::SystemDepsList::for_each(|type_id| {
-            let dep_index = map.get(&type_id).unwrap();
-            graph.add_edge(*dep_index, *system_index, ());
-        });
-    }
+    fn insert_edges<S: System>(map: &HashMap<TypeId, NodeIndex>, graph: &mut Graph<(), ()>) {}
 }
