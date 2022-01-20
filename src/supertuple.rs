@@ -1,7 +1,7 @@
 use std::any::{Any, TypeId};
 use tuple_list::{Tuple, TupleList};
 
-use super::{BoxAny, SuperAny};
+use super::SuperAny;
 
 trait SuperTuple<'a>: Tuple {
     type SuperTupleList: SuperTupleList<'a, SuperTuple = Self>;
@@ -39,21 +39,15 @@ impl<'a> SuperTupleList<'a> for () {
     type Tail = ();
     type TypeIds = ();
 
-    fn into_super_tuple(self) -> Self::SuperTuple {
-        ()
-    }
+    fn into_super_tuple(self) -> Self::SuperTuple {}
 
-    fn from_parts(_: (&'a mut Self::Head, Self::Tail)) -> Self {
-        ()
-    }
+    fn from_parts(_: (&'a mut Self::Head, Self::Tail)) -> Self {}
 
     fn from_head(_: &Self::Head) -> Option<Self> {
         Some(())
     }
 
-    fn type_ids() -> Self::TypeIds {
-        ()
-    }
+    fn type_ids() -> Self::TypeIds {}
 }
 
 impl<'a, H: 'static, T> SuperTupleList<'a> for (&'a mut H, T)
@@ -75,7 +69,7 @@ where
         head_tail
     }
 
-    fn from_head(head: &Self::Head) -> Option<Self> {
+    fn from_head(_: &Self::Head) -> Option<Self> {
         None
     }
 
@@ -143,7 +137,7 @@ where
 
 #[cfg(test)]
 mod tests {
-    use super::super::Map;
+    use super::super::BoxAny;
     use super::*;
 
     use std::collections::HashMap;
@@ -152,7 +146,7 @@ mod tests {
     #[test]
     fn test() {
         let mut map = HashMap::new();
-        map.insert(TypeId::of::<usize>(), convert(1 as usize));
+        map.insert(TypeId::of::<usize>(), convert(1_usize));
         map.insert(TypeId::of::<String>(), convert("Hallo".to_string()));
         let mut map: HashMap<_, _> = map
             .iter_mut()
