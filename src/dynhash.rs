@@ -1,14 +1,13 @@
 use std::any::Any;
 use std::hash::{Hash, Hasher};
 
-trait DynHash: DynEq {
-    fn clone_box(&self) -> Box<dyn DynHash>;
+pub(crate) trait DynHash: DynEq {
     fn as_box_any(self: Box<Self>) -> Box<dyn Any>;
     fn as_dyn_eq(&self) -> &dyn DynEq;
     fn hash(&self, state: &mut dyn Hasher);
 }
 
-trait DynEq: Any {
+pub(crate) trait DynEq: Any {
     fn as_any(&self) -> &dyn Any;
     fn eq(&self, other: &dyn DynEq) -> bool;
 }
@@ -30,12 +29,8 @@ where
 }
 impl<T> DynHash for T
 where
-    T: Hash + Clone + Eq + Any,
+    T: Hash + Eq + Any,
 {
-    fn clone_box(&self) -> Box<dyn DynHash> {
-        Box::new(self.clone())
-    }
-
     fn as_box_any(self: Box<Self>) -> Box<dyn Any> {
         self
     }
@@ -62,9 +57,3 @@ impl PartialEq for dyn DynHash {
 }
 
 impl Eq for dyn DynHash {}
-
-impl Clone for Box<dyn DynHash> {
-    fn clone(&self) -> Self {
-        self.clone_box()
-    }
-}
